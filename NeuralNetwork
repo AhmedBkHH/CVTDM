@@ -1,0 +1,123 @@
+library(dplyr)
+library(neuralnet)
+library(Metrics)
+library(caret)
+#--------------Load Data----------------
+Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
+Ab=Ab[,-1]
+
+#-----------Scale data----------------
+range <- function(x){(x-min(x))/(max(x)-min(x))}
+Ab <- Ab %>%mutate_if(is.numeric, range)
+
+#---------Split data--------------------
+set.seed(1)  
+train.index <- sample(row.names(Ab), 0.8*dim(Ab)[1])  
+train.df <- Ab[train.index,]
+rest.index = setdiff(row.names(Ab), train.index)
+valid.df <- Ab[rest.index,]  
+
+#------NN with 1 layers and four nodes---------
+FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = 4)
+options(scipen=999, digits = 4)
+# plot network
+plot(FN, rep="best")
+#RMSE training and validation sets
+predT <- compute(FN, train.df)$net.result
+rmse(train.df$Absenteeism.time.in.hours,predT)
+
+predT <- compute(FN, valid.df)$net.result
+rmse(valid.df$Absenteeism.time.in.hours,predT)
+
+
+# predT=120*predT
+plot( valid.df$Absenteeism.time.in.hours,predT, col = "red",
+      main = 'Real vs Predicted')
+abline(0, 1, lwd = 2)
+
+boxplot(predT-valid.df$Absenteeism.time.in.hours)
+
+#------NN with 2 layers and four nodes---------
+FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(4,4))
+options(scipen=999, digits = 4)
+# plot network
+plot(FN, rep="best")
+#RMSE training and validation sets
+predT <- compute(FN, train.df)$net.result
+rmse(train.df$Absenteeism.time.in.hours,predT)
+
+predT <- compute(FN, valid.df)$net.result
+rmse(valid.df$Absenteeism.time.in.hours,predT)
+
+
+# predT=120*predT
+plot( valid.df$Absenteeism.time.in.hours,predT, col = "red",
+     main = 'Real vs Predicted')
+abline(0, 1, lwd = 2)
+
+boxplot(predT-valid.df$Absenteeism.time.in.hours)
+#NN with two layers performs better on the data
+
+#-------NN with 2 layers of 7 nodes------
+FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(7,7))
+options(scipen=999, digits = 4)
+# plot network
+plot(FN, rep="best")
+#RMSE training and validation sets
+predT <- compute(FN, train.df)$net.result
+rmse(train.df$Absenteeism.time.in.hours,predT)
+predT <- compute(FN, valid.df)$net.result
+rmse(valid.df$Absenteeism.time.in.hours,predT)
+
+
+plot( valid.df$Absenteeism.time.in.hours,predT, col = "red",
+     main = 'Real vs Predicted')
+abline(0, 1, lwd = 2)
+
+boxplot(predT-valid.df$Absenteeism.time.in.hours)
+
+#adding nodes to the neural network increases the prediction efficiency 
+
+#-------------------1 layer 4 nodes-----
+
+FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(5,2))
+options(scipen=999, digits = 4)
+# plot network
+plot(FN, rep="best")
+#RMSE training and validation sets
+predT <- compute(FN, train.df)$net.result
+rmse(train.df$Absenteeism.time.in.hours,predT)
+
+predT <- compute(FN, valid.df)$net.result
+rmse(valid.df$Absenteeism.time.in.hours,predT)
+
+
+
+plot(valid.df$Absenteeism.time.in.hours,predT, col = "red",
+     main = 'Real vs Predicted')
+abline(0, 1, lwd = 2)
+boxplot((predT-valid.df$Absenteeism.time.in.hours))
+
+
+FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(7,7,2))
+options(scipen=999, digits = 4)
+# plot network
+plot(FN, rep="best")
+#RMSE training and validation sets
+predT <- compute(FN, train.df)$net.result
+rmse(train.df$Absenteeism.time.in.hours,predT)
+
+predT <- compute(FN, valid.df)$net.result
+rmse(valid.df$Absenteeism.time.in.hours,predT)
+
+FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(5,5))
+options(scipen=999, digits = 4)
+# plot network
+plot(FN, rep="best")
+#RMSE training and validation sets
+predT <- compute(FN, train.df)$net.result
+rmse(train.df$Absenteeism.time.in.hours,predT)
+
+predT <- compute(FN, valid.df)$net.result
+rmse(valid.df$Absenteeism.time.in.hours,predT)
+
