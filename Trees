@@ -1,0 +1,157 @@
+library(readr)
+library(car)
+library(forecast)
+library(ggplot2)
+library(MASS)
+library("partykit")
+library(naniar)
+library(rsample)     # data splitting 
+library(dplyr)       # data wrangling
+library(rpart)       # performing regression trees
+library(rpart.plot)  # plotting regression trees
+library(ipred)       # bagging
+library(caret)       # bagging
+library(randomForest)
+Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
+boxplot(Ab$Absenteeism.time.in.hours)
+outliers <- boxplot(Ab$Absenteeism.time.in.hours, plot=FALSE)$out
+Ab<- Ab[-which(Ab$Absenteeism.time.in.hours %in% outliers),]
+boxplot(Ab$Absenteeism.time.in.hours)
+head(Ab)
+#Split data
+set.seed(1)  
+train.index <- sample(row.names(Ab), 0.8*dim(Ab)[1])  
+train.df <- Ab[train.index,]
+rest.index = setdiff(row.names(Ab), train.index)
+valid.df <- Ab[rest.index,]  
+
+#-------------------------Full tree--------------------
+Full_RT <- rpart(Absenteeism.time.in.hours ~., data = train.df,
+                 method = "anova", minbucket = 1, maxdepth = 30, cp = 0.001)
+prp(Full_RT)
+rpart.plot(Full_RT)
+printcp(Full_RT)
+# cp=0.01840      xerror=0.640  xstd=0.24276163
+plotcp(Full_RT)
+Full_RT$variable.importance
+
+#prediction errors:
+train.err <-predict(Full_RT, train.df) -train.df$Absenteeism.time.in.hours
+valid.err <-predict(Full_RT, valid.df) -valid.df$Absenteeism.time.in.hours
+
+options(scipen=999, digits = 0)
+p=predict(Full_RT, train.df)
+RMSE(p,train.df$Absenteeism.time.in.hours)
+accuracy(p, train.df$Absenteeism.time.in.hours)
+pv=predict(Full_RT, valid.df)
+RMSE(pv,valid.df$Absenteeism.time.in.hours)
+accuracy(pv, valid.df$Absenteeism.time.in.hours)
+accuracy = sum(abs((valid.err))/valid.df$Absenteeism.time.in.hours)/292
+#+/- 3hours of errors
+hist(valid.err, breaks = 25, xlab = "Residuals", main = "",)
+plot(density(valid.err))
+#We can identify a bell shape on the histogram, centered at 0, this shape indicates that more than 250 residuals
+#(85.6% of the predicted values) are tt close to 0.
+qqPlot(valid.err)
+#create a data fram from the training and validation errors to plot
+#Boxplots:
+errF <-data.frame(Error =c(train.err, valid.err), 
+                 Set =c(rep("Training", length(train.err)),
+                        rep("Validation", length(valid.err))))
+
+#createerror box plots
+boxplot(Error~Set, data=errF, main="RMS Errors",
+        xlab = "Set", ylab = "Error",
+        col="cornsilk2",medcol="darkgoldenrod1",border="black",
+        staplelwd=3,outcex=1,outcol="coral4")
+#The training data has fewer outliers and appears performing better than the validation dataset.
+#The range of errors is roughly same and this indicates that we didn't underfit or overfit our data.
+#If we make sample size bigger(with respecting the limilts of the overfitting) we can 
+#reduce training errors but we should then tolerate more complexity in the performed Tree.
+
+#-----------------------Prunned tree------------------
+PrunnedRt <- prune(Full_RT, cp = 0.0184)
+plot(as.party(PrunnedRt), tp_args = list(id = FALSE))
+#Plot regression tree with boxplots
+train.err <-predict(PrunnedRt, train.df) -train.df$Absenteeism.time.in.hours
+valid.err <-predict(PrunnedRt, valid.df) -valid.df$Absenteeism.time.in.hours
+p=predict(PrunnedRt, train.df)
+accuracy(p, train.df$Absenteeism.time.in.hours)
+pv=predict(PrunnedRt, valid.df)
+accuracy(pv, valid.df$Absenteeism.time.in.hours)
+hist(valid.err, breaks = 25, xlab = "Residuals", main = "",)
+plot(density(valid.err))
+#+/- 2 hours of error
+#We can identify a bell shape on the histogram, centered at 0, this shape indicates that more than 250 residuals
+#(85.6% of the predicted values) are tt close to 0.
+qqPlot(valid.err)
+#create a data fram from the training and validation errors in order to plot
+err <-data.frame(Error =c(train.err, valid.err), 
+                 Set =c(rep("Training", length(train.err)),
+                        rep("Validation", length(valid.err))))
+
+#create error box plots
+boxplot(Error~Set, data=err, main="RMS Errors",
+        xlab = "Set", ylab = "Error",
+        col="cornsilk2",medcol="darkgoldenrod1",border="black",
+        staplelwd=3,outcex=1,outcol="coral4")
+#Both of the validation and training set performs better in the Full tree than with the pruned one.
+
+#---------------------------------random forest---------------------
+rf <- randomForest(Absenteeism.time.in.hours ~ ., data = train.df, ntree = 500,
+                   mtry = 4, nodesize = 5, importance = TRUE)
+## variable importance plot
+varImpPlot(rf, type = 1)
+rf.pred <- predict(rf, valid.df)
+
+valid.err <-rf.pred -valid.df$Absenteeism.time.in.hours
+train.err <-predict(rf, train.df) -train.df$Absenteeism.time.in.hours
+valid.err <-predict(rf, valid.df) -valid.df$Absenteeism.time.in.hours
+accuracy(rf.pred, valid.df$Absenteeism.time.in.hours)
+hist(valid.err, breaks = 25, xlab = "Residuals", main = "",)
+plot(density(valid.err))
+qqPlot(valid.err)
+#create a data fram from the training and validation errors to plot
+err <-data.frame(Error =c(train.err, valid.err), 
+                 Set =c(rep("Training", length(train.err)),
+                        rep("Validation", length(valid.err))))
+
+#createerror box plots
+boxplot(Error~Set, data=err, main="RMS Errors",
+        xlab = "Set", ylab = "Error",
+        col="cornsilk2",medcol="darkgoldenrod1",border="black",
+        staplelwd=3,outcex=1,outcol="coral4")
+
+#-------------------Bagging-Boosting Tree--------------
+Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
+Ab=Ab[,-1]
+outliers <- boxplot(Ab$Absenteeism.time.in.hours, plot=FALSE)$out
+Ab<- Ab[-which(Ab$Absenteeism.time.in.hours %in% outliers),]
+Ab$Absenteeism.time.in.hours=as.factor(Ab$Absenteeism.time.in.hours)
+set.seed(1)
+train.index <- sample(row.names(Ab), 0.8*dim(Ab)[1])
+train.df <- Ab[train.index,]
+rest.index = setdiff(row.names(Ab), train.index)
+valid.df <- Ab[rest.index,]
+library(adabag)
+library(rpart)
+library(caret)
+# single tree
+tr <- rpart(Absenteeism.time.in.hours ~ ., data = train.df)
+pred <- predict(tr, valid.df, type = "class")
+confusionMatrix(as.factor(pred), valid.df$Absenteeism.time.in.hours)
+c=confusionMatrix(pred, valid.df$Absenteeism.time.in.hours)
+c$overall
+# bagging
+bag <- bagging(Absenteeism.time.in.hours ~ ., data = train.df)
+pred <- predict(bag, valid.df, type = "class")
+confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
+c=confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
+c$overall
+# boosting
+boost <- boosting(Absenteeism.time.in.hours ~ ., data = Ab)
+pred <- predict(boost, valid.df, type = "class")
+confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
+c=confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
+c$overall
+
