@@ -1,0 +1,157 @@
+library(readr)
+library(naniar)
+Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
+head(Ab)
+cor(Ab)
+Ab=Ab[,-1]
+head(Ab)
+summary(Ab)
+str(Ab)
+#Attributes Education and Seasons are converted to dummies variables
+Spring <- ifelse(Ab$Seasons == '2', 1, 0)
+Summer <- ifelse(Ab$Seasons == '3', 1, 0)
+Autumn <- ifelse(Ab$Seasons == '4', 1, 0)
+#Hide Seasons column
+head(Ab[,-4])
+Ab<- data.frame(Ab[,-4],
+                Spring = Spring,
+                Summer = Summer,
+                Autumn = Autumn)
+head(Ab)
+#create dummy variables
+Graduate <- ifelse(Ab$Education == '2', 1, 0)
+Post <- ifelse(Ab$Education == '3', 1, 0)
+MD <- ifelse(Ab$Education == '4', 1, 0)
+#Hide Education column
+head(Ab[,-10])
+Ab<- data.frame(Ab[,-11],
+                     Graduate = Graduate,
+                     Postgraduate = Post,
+                     MasterandDoctor = MD)
+head(Ab)
+boxplot(Ab$Absenteeism.time.in.hours)
+plot(density(Ab$Absenteeism.time.in.hours))
+#1,3% of the Absenteism are outliers
+#Define Work average load in hours instead of minutes:
+Ab$Work.load.Average.day=Ab$Work.load.Average.day/60
+str(Ab)
+gg_miss_var(Ab, show_pct = TRUE)
+#We split the dataset into training and test sets in an 60-40 ratio.
+#With the reason of absence we predict the number of hours of absenteiism
+set.seed(1)
+train.index = sample(row.names(Ab), 0.6*dim(Ab)[1])
+valid.index = setdiff(row.names(Ab), train.index)
+train.df = Ab[train.index, ]
+valid.df = Ab[valid.index, ]
+# use lm() to run a linear regression of Price on all  predictors in the
+# training set.
+# use . after ~ to include all the remaining columns in train.df as predictors.
+Ab.lm <- lm(Absenteeism.time.in.hours ~ ., data = train.df)
+# use options() to ensure numbers are not displayed in scientific notation.
+options(scipen = 999)
+summary(Ab.lm)
+#la recherche d'un R2 élevé ne doit pas être un but en soi..
+
+
+library(car)
+vif(Ab.lm)
+#It seems that there is a real problem of multicollinearity between weight, height and body mass index, we can remove Body.mass.index and reverify the VIF coefficients:
+Ab=Ab[,-17]
+#We redifine our dataset
+set.seed(1)
+train.index = sample(row.names(Ab), 0.8*dim(Ab)[1])
+valid.index = setdiff(row.names(Ab), train.index)
+train.df = Ab[train.index, ]
+valid.df = Ab[valid.index, ]
+Ab.lm <- lm(Absenteeism.time.in.hours ~ ., data = train.df)
+summary(Ab.lm)
+
+vif(Ab.lm)
+#Problem of colinearity resolved
+library(forecast)
+# use predict() to make predictions on a new set.
+Ab.lm.pred <- predict(Ab.lm, valid.df)
+summary(Ab.lm.pred)
+options(scipen=999, digits = 0)
+some.residuals <- valid.df$Absenteeism.time.in.hours[1:20] - Ab.lm.pred[1:20]
+data.frame("Predicted" = Ab.lm.pred[1:20], "Actual" = valid.df$Absenteeism.time.in.hours[1:20],
+           "Residual" = some.residuals)
+options(scipen=999, digits = 3)
+# use accuracy() to compute common accuracy measures.
+accuracy(Ab.lm.pred, valid.df$Absenteeism.time.in.hours)
+par(mfrow = c(2, 2))  # Split the plotting panel into a 2 x 2 grid
+plot(Ab.lm)  # Plot the model information
+par(mfrow = c(1, 1))
+all.residuals <- valid.df$Absenteeism.time.in.hours - Ab.lm.pred
+hist(all.residuals, breaks = 25, xlab = "Residuals", main = "",)
+#We can identify a bell shape on the histogram, centered at 0, this shape indicates that more than 250 residuals(85.6% of the predicted values) are tt close to 0.
+#produce residual vs. fitted plot
+plot(valid.df$Absenteeism.time.in.hours,all.residuals)
+boxplot(all.residuals)
+#create Q-Q plot for residuals
+qqPlot(all.residuals)
+
+
+#Create density plot of residuals
+plot(density(all.residuals))
+#We can see that the density plot roughly follows a bell shape, although it is slightly skewed to the right.
+#---------------------------------------------------------------------------------------------------------------
+library(leaps)
+#----------------------------Best Subset---------------
+search <- regsubsets(Absenteeism.time.in.hours ~ ., data = train.df, nbest = 1, nvmax = dim(train.df)[2],
+                     method = "exhaustive")
+sum <- summary(search)
+# show models
+sum$which
+# show metrics
+sum$rsq
+#rsq keeps increasing when adding new factors until we reach 19 predictive variables and then stabilizes.
+sum$adjr2
+sum$cp
+#The Cp indicates that a model with  9  predictors is good. The dominant predictor in all models are Reason for absence,
+#disciplinary failure and having sons playing important roles as well.
+#----------------------backward regression------------
+
+AIC(Ab.lm.step)
+Ab.lm.stepb <- step(Ab.lm, direction = "backward")#AIC=1177
+summary(Ab.lm.stepb) 
+#The backward selection dropped 14 predictors and kept 9.(as mentionned above for a cp optimization)
+Ab.lm.stepb.pred <- predict(Ab.lm.stepb, valid.df)
+accuracy(Ab.lm.stepb.pred, valid.df$Absenteeism.time.in.hours)
+plot(density(Ab.lm.stepb.pred))
+plot(Ab.lm.stepb.pred-valid.df$Absenteeism.time.in.hours)
+boxplot(Ab.lm.stepb.pred-valid.df$Absenteeism.time.in.hours)
+#----------------------Forward regression------------
+
+Ab.lm.stepf <- step(Ab.lm, direction = "forward")#AIC=1196
+summary(Ab.lm.stepf) 
+#The forward selection kept the 22 predictors
+Ab.lm.stepf.pred <- predict(Ab.lm.stepf, valid.df)
+accuracy(Ab.lm.stepf.pred, valid.df$Absenteeism.time.in.hours)
+plot(density(Ab.lm.stepf.pred))
+plot(Ab.lm.stepf.pred-valid.df$Absenteeism.time.in.hours)
+boxplot(Ab.lm.stepf.pred-valid.df$Absenteeism.time.in.hours)
+#----------------------both regression------------
+# set directions = to either "backward", "forward", or "both".
+Ab.lm.stept <- step(Ab.lm, direction = "both")#AIC=1177
+summary(Ab.lm.stept)
+#The backward selection dropped 14 predictors and kept 8.(as mentionned above for a cp optimization)
+Ab.lm.stept.pred <- predict(Ab.lm.stept, valid.df)
+accuracy(Ab.lm.stept.pred, valid.df$Absenteeism.time.in.hours)
+plot(density(Ab.lm.stept.pred))
+plot(Ab.lm.stept.pred-valid.df$Absenteeism.time.in.hours)
+boxplot(Ab.lm.stept.pred-valid.df$Absenteeism.time.in.hours)
+
+#models with
+#smaller AIC and BIC values are considered better.
+AIC(Ab.lm)
+BIC(Ab.lm)
+AIC(Ab.lm.stepb)
+BIC(Ab.lm.stepb)
+AIC(Ab.lm.stepf)
+BIC(Ab.lm.stepf)
+AIC(Ab.lm.stept)
+BIC(Ab.lm.stept)
+#The smaller AIC and BIC are recorded for the model of the backward selection, with 9 predictive variables:
+#Reason.for.absence + Transportation.expense + Age + Disciplinary.failure + Son + Social.drinker + Social.smoker + Weight + Postgraduate
+#Reason.for.absence,Month.of.absence,Day.of.the.week,Disciplinary.failure ,Son ,Social.drinker,Height,Spring,Summer
