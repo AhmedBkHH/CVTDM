@@ -1,3 +1,4 @@
+
 library(readr)
 library(car)
 library(forecast)
@@ -12,12 +13,15 @@ library(rpart.plot)  # plotting regression trees
 library(ipred)       # bagging
 library(caret)       # bagging
 library(randomForest)
+library(reshape)
 Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
 boxplot(Ab$Absenteeism.time.in.hours)
 outliers <- boxplot(Ab$Absenteeism.time.in.hours, plot=FALSE)$out
 Ab<- Ab[-which(Ab$Absenteeism.time.in.hours %in% outliers),]
 boxplot(Ab$Absenteeism.time.in.hours)
 head(Ab)
+Ab=Ab[,-1]
+Ab=Ab[,-19]
 #Split data
 set.seed(1)  
 train.index <- sample(row.names(Ab), 0.8*dim(Ab)[1])  
@@ -31,7 +35,16 @@ Full_RT <- rpart(Absenteeism.time.in.hours ~., data = train.df,
 prp(Full_RT)
 rpart.plot(Full_RT)
 printcp(Full_RT)
-# cp=0.01840      xerror=0.640  xstd=0.24276163
+# cp=0.01840      xerror=0.640  xstd=0.0626
+plotcp(Full_RT)
+Full_RT$variable.importance
+
+Full_RT <- rpart(Absenteeism.time.in.hours ~., data = train.df,
+                 method = "anova", minbucket = 1, maxdepth = 30, cp = 0.018)
+prp(Full_RT)
+rpart.plot(Full_RT)
+printcp(Full_RT)
+# cp=0.01840      xerror=0.640  xstd=0.0626
 plotcp(Full_RT)
 Full_RT$variable.importance
 
@@ -39,19 +52,19 @@ Full_RT$variable.importance
 train.err <-predict(Full_RT, train.df) -train.df$Absenteeism.time.in.hours
 valid.err <-predict(Full_RT, valid.df) -valid.df$Absenteeism.time.in.hours
 
-options(scipen=999, digits = 0)
+options(scipen=999, digits = 2)
 p=predict(Full_RT, train.df)
-RMSE(p,train.df$Absenteeism.time.in.hours)
+D1=RMSE(p,train.df$Absenteeism.time.in.hours)
 accuracy(p, train.df$Absenteeism.time.in.hours)
 pv=predict(Full_RT, valid.df)
-RMSE(pv,valid.df$Absenteeism.time.in.hours)
+D2=RMSE(pv,valid.df$Absenteeism.time.in.hours)
 accuracy(pv, valid.df$Absenteeism.time.in.hours)
 accuracy = sum(abs((valid.err))/valid.df$Absenteeism.time.in.hours)/292
 #+/- 3hours of errors
 hist(valid.err, breaks = 25, xlab = "Residuals", main = "",)
 plot(density(valid.err))
-#We can identify a bell shape on the histogram, centered at 0, this shape indicates that more than 250 residuals
-#(85.6% of the predicted values) are tt close to 0.
+#We can identify a bell shape on the histogram, centered at 0, this shape indicates that more than 120 residuals
+#(86% of the predicted values) are close to 0.
 qqPlot(valid.err)
 #create a data fram from the training and validation errors to plot
 #Boxplots:
@@ -101,12 +114,15 @@ boxplot(Error~Set, data=err, main="RMS Errors",
 rf <- randomForest(Absenteeism.time.in.hours ~ ., data = train.df, ntree = 500,
                    mtry = 4, nodesize = 5, importance = TRUE)
 ## variable importance plot
+rf.pred <- predict(rf, train.df)
+E1=RMSE(rf.pred,train.df$Absenteeism.time.in.hours)
 varImpPlot(rf, type = 1)
 rf.pred <- predict(rf, valid.df)
 
 valid.err <-rf.pred -valid.df$Absenteeism.time.in.hours
 train.err <-predict(rf, train.df) -train.df$Absenteeism.time.in.hours
 valid.err <-predict(rf, valid.df) -valid.df$Absenteeism.time.in.hours
+E2=RMSE(rf.pred,valid.df$Absenteeism.time.in.hours)
 accuracy(rf.pred, valid.df$Absenteeism.time.in.hours)
 hist(valid.err, breaks = 25, xlab = "Residuals", main = "",)
 plot(density(valid.err))
@@ -125,6 +141,7 @@ boxplot(Error~Set, data=err, main="RMS Errors",
 #-------------------Bagging-Boosting Tree--------------
 Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
 Ab=Ab[,-1]
+Ab=Ab[,-19]
 outliers <- boxplot(Ab$Absenteeism.time.in.hours, plot=FALSE)$out
 Ab<- Ab[-which(Ab$Absenteeism.time.in.hours %in% outliers),]
 Ab$Absenteeism.time.in.hours=as.factor(Ab$Absenteeism.time.in.hours)
@@ -138,20 +155,71 @@ library(rpart)
 library(caret)
 # single tree
 tr <- rpart(Absenteeism.time.in.hours ~ ., data = train.df)
-pred <- predict(tr, valid.df, type = "class")
-confusionMatrix(as.factor(pred), valid.df$Absenteeism.time.in.hours)
-c=confusionMatrix(pred, valid.df$Absenteeism.time.in.hours)
-c$overall
-# bagging
-bag <- bagging(Absenteeism.time.in.hours ~ ., data = train.df)
-pred <- predict(bag, valid.df, type = "class")
-confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
-c=confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
-c$overall
-# boosting
-boost <- boosting(Absenteeism.time.in.hours ~ ., data = Ab)
-pred <- predict(boost, valid.df, type = "class")
-confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
-c=confusionMatrix(as.factor(pred$class), valid.df$Absenteeism.time.in.hours)
-c$overall
 
+pred <- predict(tr, train.df)
+pred=as.numeric(pred)
+train.df$Absenteeism.time.in.hours=as.numeric(train.df$Absenteeism.time.in.hours)
+F1=RMSE(pred,train.df$Absenteeism.time.in.hours)
+
+
+pred <- predict(tr, valid.df)
+pred=as.numeric(pred)
+valid.df$Absenteeism.time.in.hours=as.numeric(valid.df$Absenteeism.time.in.hours)
+F2=RMSE(pred, valid.df$Absenteeism.time.in.hours)
+accuracy(pred,valid.df$Absenteeism.time.in.hours)
+# bagging
+
+Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
+Ab=Ab[,-1]
+Ab=Ab[,-19]
+outliers <- boxplot(Ab$Absenteeism.time.in.hours, plot=FALSE)$out
+Ab<- Ab[-which(Ab$Absenteeism.time.in.hours %in% outliers),]
+Ab$Absenteeism.time.in.hours=as.factor(Ab$Absenteeism.time.in.hours)
+set.seed(1)
+train.index <- sample(row.names(Ab), 0.8*dim(Ab)[1])
+train.df <- Ab[train.index,]
+rest.index = setdiff(row.names(Ab), train.index)
+valid.df <- Ab[rest.index,]
+
+
+bag <- bagging(Absenteeism.time.in.hours ~ ., data = train.df)
+pred <- predict(bag, train.df)
+train.df$Absenteeism.time.in.hours=as.numeric(train.df$Absenteeism.time.in.hours)
+pred$class=as.numeric(pred$class)
+g1=RMSE(pred$class,train.df$Absenteeism.time.in.hours)
+pred <- predict(bag, valid.df)
+pred$class=as.numeric(pred$class)
+valid.df$Absenteeism.time.in.hours=as.numeric(valid.df$Absenteeism.time.in.hours)
+g2=RMSE(pred$class,valid.df$Absenteeism.time.in.hours)
+accuracy(pred$class,valid.df$Absenteeism.time.in.hours)
+
+# boosting
+
+Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
+Ab=Ab[,-1]
+Ab=Ab[,-19]
+outliers <- boxplot(Ab$Absenteeism.time.in.hours, plot=FALSE)$out
+Ab<- Ab[-which(Ab$Absenteeism.time.in.hours %in% outliers),]
+Ab$Absenteeism.time.in.hours=as.factor(Ab$Absenteeism.time.in.hours)
+set.seed(1)
+train.index <- sample(row.names(Ab), 0.8*dim(Ab)[1])
+train.df <- Ab[train.index,]
+rest.index = setdiff(row.names(Ab), train.index)
+valid.df <- Ab[rest.index,]
+
+boost <- boosting(Absenteeism.time.in.hours ~ ., data = train.df)
+pred <- predict(boost, train.df)
+pred$class=as.numeric(pred$class)
+train.df$Absenteeism.time.in.hours=as.numeric(train.df$Absenteeism.time.in.hours)
+H1=RMSE(pred$class,train.df$Absenteeism.time.in.hours)
+pred <- predict(boost, valid.df)
+
+pred$class=as.numeric(pred$class)
+valid.df$Absenteeism.time.in.hours=as.numeric(valid.df$Absenteeism.time.in.hours)
+H2=RMSE(pred$class,valid.df$Absenteeism.time.in.hours)
+accuracy(pred$class,valid.df$Absenteeism.time.in.hours)
+#------
+rmse.df <- data.frame(Tree = c("Full","Random forest","single tree","Bagging","Boosting"), training = c(D1,E1,F1,g1,H1), validation = c(D2, E2, F2,g2,H2))
+rmse.df.melt <- melt(rmse.df)
+rmse.plot <- ggplot(rmse.df.melt, aes(x=Tree, y=value, fill=variable)) + geom_bar(position="dodge", stat="identity") + ggtitle("Root mean square error (RMSE)") + theme_classic()
+rmse.plot
