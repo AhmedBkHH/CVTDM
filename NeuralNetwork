@@ -2,6 +2,7 @@ library(dplyr)
 library(neuralnet)
 library(Metrics)
 library(caret)
+library(reshape)
 #--------------Load Data----------------
 Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
 Ab=Ab[,-1]
@@ -16,7 +17,7 @@ train.index <- sample(row.names(Ab), 0.8*dim(Ab)[1])
 train.df <- Ab[train.index,]
 rest.index = setdiff(row.names(Ab), train.index)
 valid.df <- Ab[rest.index,]  
-
+S=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
 #------NN with 1 layers and four nodes---------
 FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = 4)
 options(scipen=999, digits = 4)
@@ -24,12 +25,11 @@ options(scipen=999, digits = 4)
 plot(FN, rep="best")
 #RMSE training and validation sets
 predT <- compute(FN, train.df)$net.result
-rmse(train.df$Absenteeism.time.in.hours,predT)
-
+A1=rmse(((train.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
+accuracy(train.df$Absenteeism.time.in.hours,predT)
 predT <- compute(FN, valid.df)$net.result
-rmse(valid.df$Absenteeism.time.in.hours,predT)
-
-
+A2=rmse(((valid.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
+accuracy(((valid.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
 # predT=120*predT
 plot( valid.df$Absenteeism.time.in.hours,predT, col = "red",
       main = 'Real vs Predicted')
@@ -44,11 +44,11 @@ options(scipen=999, digits = 4)
 plot(FN, rep="best")
 #RMSE training and validation sets
 predT <- compute(FN, train.df)$net.result
-rmse(train.df$Absenteeism.time.in.hours,predT)
+B1=rmse(((train.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
 
 predT <- compute(FN, valid.df)$net.result
-rmse(valid.df$Absenteeism.time.in.hours,predT)
-
+B2=rmse(((valid.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
+accuracy(((valid.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
 
 # predT=120*predT
 plot( valid.df$Absenteeism.time.in.hours,predT, col = "red",
@@ -65,10 +65,10 @@ options(scipen=999, digits = 4)
 plot(FN, rep="best")
 #RMSE training and validation sets
 predT <- compute(FN, train.df)$net.result
-rmse(train.df$Absenteeism.time.in.hours,predT)
+c1=rmse(((train.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
 predT <- compute(FN, valid.df)$net.result
-rmse(valid.df$Absenteeism.time.in.hours,predT)
-
+c2=rmse(((valid.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
+accuracy(((valid.df$Absenteeism.time.in.hours)*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours),(predT*(max(S$Absenteeism.time.in.hours)-min(S$Absenteeism.time.in.hours)))+min(S$Absenteeism.time.in.hours))
 
 plot( valid.df$Absenteeism.time.in.hours,predT, col = "red",
      main = 'Real vs Predicted')
@@ -76,48 +76,10 @@ abline(0, 1, lwd = 2)
 
 boxplot(predT-valid.df$Absenteeism.time.in.hours)
 
-#adding nodes to the neural network increases the prediction efficiency 
+rmsenn.df <- data.frame(neurons = c("1,4","2,4","2,7"), training = c(A1,B1,c1), validation = c(A2, B2, c2))
 
-#-------------------1 layer 4 nodes-----
+rmsenn.df.melt <- melt(rmsenn.df)
+rmsenn.plot <- ggplot(rmsenn.df.melt, aes(x=neurons, y=value, fill=variable)) + geom_bar(position="dodge", stat="identity") + ggtitle("Root mean square error (RMSE)") + theme_classic() 
 
-FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(5,2))
-options(scipen=999, digits = 4)
-# plot network
-plot(FN, rep="best")
-#RMSE training and validation sets
-predT <- compute(FN, train.df)$net.result
-rmse(train.df$Absenteeism.time.in.hours,predT)
-
-predT <- compute(FN, valid.df)$net.result
-rmse(valid.df$Absenteeism.time.in.hours,predT)
-
-
-
-plot(valid.df$Absenteeism.time.in.hours,predT, col = "red",
-     main = 'Real vs Predicted')
-abline(0, 1, lwd = 2)
-boxplot((predT-valid.df$Absenteeism.time.in.hours))
-
-
-FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(7,7,2))
-options(scipen=999, digits = 4)
-# plot network
-plot(FN, rep="best")
-#RMSE training and validation sets
-predT <- compute(FN, train.df)$net.result
-rmse(train.df$Absenteeism.time.in.hours,predT)
-
-predT <- compute(FN, valid.df)$net.result
-rmse(valid.df$Absenteeism.time.in.hours,predT)
-
-FN <- neuralnet(Absenteeism.time.in.hours ~ ., data = train.df,linear.output = TRUE,hidden = c(5,5))
-options(scipen=999, digits = 4)
-# plot network
-plot(FN, rep="best")
-#RMSE training and validation sets
-predT <- compute(FN, train.df)$net.result
-rmse(train.df$Absenteeism.time.in.hours,predT)
-
-predT <- compute(FN, valid.df)$net.result
-rmse(valid.df$Absenteeism.time.in.hours,predT)
+rmsenn.plot
 
