@@ -1,5 +1,14 @@
 library(readr)
 library(naniar)
+library(car)
+library(forecast)
+library(ggplot2)
+library(MASS)
+library("partykit")
+library(naniar)
+library(Metrics)
+library(caret)
+library(reshape)
 Ab=read.csv("/Users/user2/Desktop/Rstudio workspace/Absenteeism_at_work.csv")
 head(Ab)
 cor(Ab)
@@ -7,27 +16,19 @@ Ab=Ab[,-1]
 head(Ab)
 summary(Ab)
 str(Ab)
-#Attributes Education and Seasons are converted to dummies variables
-Spring <- ifelse(Ab$Seasons == '2', 1, 0)
-Summer <- ifelse(Ab$Seasons == '3', 1, 0)
-Autumn <- ifelse(Ab$Seasons == '4', 1, 0)
-#Hide Seasons column
-head(Ab[,-4])
-Ab<- data.frame(Ab[,-4],
-                Spring = Spring,
-                Summer = Summer,
-                Autumn = Autumn)
-head(Ab)
+outliers <- boxplot(Ab$Absenteeism.time.in.hours, plot=FALSE)$out
+Ab<- Ab[-which(Ab$Absenteeism.time.in.hours %in% outliers),]
+#Ab$Height=(Ab$Height-mean(Ab$Height))/(max(Ab$Height)-min(Ab$Height))
 #create dummy variables
 Graduate <- ifelse(Ab$Education == '2', 1, 0)
 Post <- ifelse(Ab$Education == '3', 1, 0)
 MD <- ifelse(Ab$Education == '4', 1, 0)
 #Hide Education column
-head(Ab[,-10])
-Ab<- data.frame(Ab[,-11],
-                     Graduate = Graduate,
-                     Postgraduate = Post,
-                     MasterandDoctor = MD)
+
+Ab<- data.frame(Ab[,-12],
+                Graduate = Graduate,
+                Postgraduate = Post,
+                MasterandDoctor = MD)
 head(Ab)
 boxplot(Ab$Absenteeism.time.in.hours)
 plot(density(Ab$Absenteeism.time.in.hours))
@@ -36,6 +37,8 @@ plot(density(Ab$Absenteeism.time.in.hours))
 Ab$Work.load.Average.day=Ab$Work.load.Average.day/60
 str(Ab)
 gg_miss_var(Ab, show_pct = TRUE)
+Ab$Month.of.absence=as.factor(Ab$Month.of.absence)
+Ab=Ab[,-4]
 #We split the dataset into training and test sets in an 60-40 ratio.
 #With the reason of absence we predict the number of hours of absenteiism
 set.seed(1)
@@ -57,6 +60,8 @@ library(car)
 vif(Ab.lm)
 #It seems that there is a real problem of multicollinearity between weight, height and body mass index, we can remove Body.mass.index and reverify the VIF coefficients:
 Ab=Ab[,-17]
+head(Ab)
+
 #We redifine our dataset
 set.seed(1)
 train.index = sample(row.names(Ab), 0.8*dim(Ab)[1])
@@ -65,12 +70,15 @@ train.df = Ab[train.index, ]
 valid.df = Ab[valid.index, ]
 Ab.lm <- lm(Absenteeism.time.in.hours ~ ., data = train.df)
 summary(Ab.lm)
-
+AIC(Ab.lm)
 vif(Ab.lm)
 #Problem of colinearity resolved
 library(forecast)
 # use predict() to make predictions on a new set.
+Ab.lm.pred <- predict(Ab.lm, train.df)
+V1=RMSE(Ab.lm.pred,train.df$Absenteeism.time.in.hours)
 Ab.lm.pred <- predict(Ab.lm, valid.df)
+V2=RMSE(Ab.lm.pred,valid.df$Absenteeism.time.in.hours)
 summary(Ab.lm.pred)
 options(scipen=999, digits = 0)
 some.residuals <- valid.df$Absenteeism.time.in.hours[1:20] - Ab.lm.pred[1:20]
@@ -108,15 +116,18 @@ sum$rsq
 #rsq keeps increasing when adding new factors until we reach 19 predictive variables and then stabilizes.
 sum$adjr2
 sum$cp
-#The Cp indicates that a model with  9  predictors is good. The dominant predictor in all models are Reason for absence,
+#The Cp indicates that a model with  12  predictors is good. The dominant predictor in all models is Reason for absence,
 #disciplinary failure and having sons playing important roles as well.
 #----------------------backward regression------------
 
-AIC(Ab.lm.step)
+#AIC(Ab.lm.step)
 Ab.lm.stepb <- step(Ab.lm, direction = "backward")#AIC=1177
 summary(Ab.lm.stepb) 
 #The backward selection dropped 14 predictors and kept 9.(as mentionned above for a cp optimization)
+Ab.lm.stepb.pred <- predict(Ab.lm.stepb, train.df)
+W1=RMSE(Ab.lm.stepb.pred,train.df$Absenteeism.time.in.hours)
 Ab.lm.stepb.pred <- predict(Ab.lm.stepb, valid.df)
+W2=RMSE(Ab.lm.stepb.pred,valid.df$Absenteeism.time.in.hours)
 accuracy(Ab.lm.stepb.pred, valid.df$Absenteeism.time.in.hours)
 plot(density(Ab.lm.stepb.pred))
 plot(Ab.lm.stepb.pred-valid.df$Absenteeism.time.in.hours)
@@ -126,17 +137,24 @@ boxplot(Ab.lm.stepb.pred-valid.df$Absenteeism.time.in.hours)
 Ab.lm.stepf <- step(Ab.lm, direction = "forward")#AIC=1196
 summary(Ab.lm.stepf) 
 #The forward selection kept the 22 predictors
+Ab.lm.stepf.pred <- predict(Ab.lm.stepf, train.df)
+X1=RMSE(Ab.lm.stepf.pred,train.df$Absenteeism.time.in.hours)
 Ab.lm.stepf.pred <- predict(Ab.lm.stepf, valid.df)
+X2=RMSE(Ab.lm.stepf.pred,valid.df$Absenteeism.time.in.hours)
+
 accuracy(Ab.lm.stepf.pred, valid.df$Absenteeism.time.in.hours)
 plot(density(Ab.lm.stepf.pred))
 plot(Ab.lm.stepf.pred-valid.df$Absenteeism.time.in.hours)
 boxplot(Ab.lm.stepf.pred-valid.df$Absenteeism.time.in.hours)
 #----------------------both regression------------
-# set directions = to either "backward", "forward", or "both".
+# set directions = to "both".
 Ab.lm.stept <- step(Ab.lm, direction = "both")#AIC=1177
 summary(Ab.lm.stept)
 #The backward selection dropped 14 predictors and kept 8.(as mentionned above for a cp optimization)
+Ab.lm.stept.pred <- predict(Ab.lm.stept, train.df)
+Y1=RMSE(Ab.lm.stept.pred,train.df$Absenteeism.time.in.hours)
 Ab.lm.stept.pred <- predict(Ab.lm.stept, valid.df)
+Y2=RMSE(Ab.lm.stept.pred,valid.df$Absenteeism.time.in.hours)
 accuracy(Ab.lm.stept.pred, valid.df$Absenteeism.time.in.hours)
 plot(density(Ab.lm.stept.pred))
 plot(Ab.lm.stept.pred-valid.df$Absenteeism.time.in.hours)
@@ -152,6 +170,13 @@ AIC(Ab.lm.stepf)
 BIC(Ab.lm.stepf)
 AIC(Ab.lm.stept)
 BIC(Ab.lm.stept)
-#The smaller AIC and BIC are recorded for the model of the backward selection, with 9 predictive variables:
+#The smaller AIC and BIC are recorded for the model of the backward selection, with 10 predictive variables:
 #Reason.for.absence + Transportation.expense + Age + Disciplinary.failure + Son + Social.drinker + Social.smoker + Weight + Postgraduate
 #Reason.for.absence,Month.of.absence,Day.of.the.week,Disciplinary.failure ,Son ,Social.drinker,Height,Spring,Summer
+rmse.df <- data.frame(Regression = c("MLR","Backward","Forward","Backward/Forward"), training = c(V1,W1,X1,Y1), validation = c(V2, W2, X2,Y2))
+
+rmse.df.melt <- melt(rmse.df)
+rmse.plot <- ggplot(rmse.df.melt, aes(x=Regression, y=value, fill=variable)) + geom_bar(position="dodge", stat="identity") + ggtitle("Root mean square error (RMSE)") + theme_gray() 
+
+rmse.plot
+
